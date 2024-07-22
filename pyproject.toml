@@ -7,6 +7,8 @@ dependencies = [
     "torch==2.3.1+cu121",
     "tqdm>=4.64.1",
     "numpy>=1.26.3",
+    "tiktoken>=0.7.0",
+    "datasets==2.18",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
