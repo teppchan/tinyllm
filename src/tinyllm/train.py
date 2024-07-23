@@ -13,12 +13,17 @@ torch.cuda.manual_seed(42)
 
 train_data = np.memmap("train.bin", dtype=np.uint16, mode="r")
 val_data = np.memmap("val.bin", dtype=np.uint16, mode="r")
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 sentence_size = 1024
 # batch_size = 6
 batch_size = 4
+embedding_size = 768
+num_heads = 6
+depth = 6
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# max_iters = 10000
+max_iters = 100
 
 
 def get_batch(
@@ -52,11 +57,8 @@ def get_batch(
     return x.to(device), y.to(device)
 
 
-embedding_size = 768
-num_heads = 6
 tokenizer = tiktoken.get_encoding("gpt2")
 
-depth = 6
 gpt = GPT(
     50257,
     embedding_size,
@@ -76,9 +78,6 @@ optimizer = torch.optim.Adam(gpt.parameters(), lr=0.0001)
 
 max_lr = 2.5e-5
 min_lr = 2.5e-6
-# max_iters = 10000
-max_iters = 10
-
 
 def get_lr(cur_iter):
     if cur_iter < warmup_iters:
