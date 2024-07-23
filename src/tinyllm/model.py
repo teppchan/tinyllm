@@ -86,7 +86,7 @@ class GPT(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        y: torch.Tensor | None,
+        y: torch.Tensor | None = None,
         pad_mask_self: torch.Tensor | None = None,
         mask_self: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor | None, torch.Tensor]:
@@ -134,7 +134,7 @@ class GPT(nn.Module):
         device,
     ) -> torch.Tensor:
         self.eval()
-        bos_tokenized = tokenizer.encode_ordinatry(bos)
+        bos_tokenized = tokenizer.encode_ordinary(bos)
         bos_tokenized = bos_tokenized[-sentence_size:]
         bos_tokenized = torch.LongTensor([bos_tokenized])
         _, add_sentence = self(bos_tokenized.to(device))
@@ -163,7 +163,7 @@ class GPT(nn.Module):
                 v, _ = torch.topk(add_sentence, min(top_K, add_sentence.size(-1)))
                 add_sentence[add_sentence < v[:, [-1]]] = -float("Inf")
             probs = F.softmax(add_sentence, dim=-1)
-            idx_next = torch.multinominal(probs, num_samples=1)
+            idx_next = torch.multinomial(probs, num_samples=1)
             return_sentence += tokenizer.decode_batch(idx_next.tolist())[0]
         return return_sentence
 

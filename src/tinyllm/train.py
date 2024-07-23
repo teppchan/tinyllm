@@ -1,5 +1,4 @@
 import gc
-from time import sleep
 
 import numpy as np
 import tiktoken
@@ -16,7 +15,8 @@ train_data = np.memmap("train.bin", dtype=np.uint16, mode="r")
 val_data = np.memmap("val.bin", dtype=np.uint16, mode="r")
 
 sentence_size = 1024
-batch_size = 6
+# batch_size = 6
+batch_size = 4
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -47,7 +47,7 @@ def get_batch(
     if device == "cuda":
         return (
             x.pin_memory().to(device, non_blocking=True),
-            y.pin_memory().to(device, non_blocking=True)
+            y.pin_memory().to(device, non_blocking=True),
         )
     return x.to(device), y.to(device)
 
@@ -68,13 +68,16 @@ gpt = GPT(
     N=depth,
 ).to(device)
 
+print(gpt)
+
 warmup_iters = 2000
 
 optimizer = torch.optim.Adam(gpt.parameters(), lr=0.0001)
 
 max_lr = 2.5e-5
 min_lr = 2.5e-6
-max_iters = 10000
+# max_iters = 10000
+max_iters = 10
 
 
 def get_lr(cur_iter):
@@ -89,7 +92,9 @@ best_loss = 1e9
 begin = 0
 val_iteration = 1
 
-scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda cur_iter: get_lr(cur_iter))
+scheduler = torch.optim.lr_scheduler.LambdaLR(
+    optimizer, lr_lambda=lambda cur_iter: get_lr(cur_iter)
+)
 gc.collect()
 torch.cuda.empty_cache()
 
@@ -163,9 +168,3 @@ for cur_iter in tqdm(range(begin, max_iters)):
         f.write(f"val_loss: {avg_valid_loss}\n")
 
     del valid_loss
-
-
-
-
-
-
