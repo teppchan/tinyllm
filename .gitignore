@@ -11,3 +11,9 @@ wheels/
 
 *.bin
 *.txt
+bak/
+data/
+figure/
+logs/
+model/
+
