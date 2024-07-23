@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-
+import numpy as np
 
 class PreLNGPTDecoderLayer(nn.Module):
     def __init__(
@@ -134,9 +134,10 @@ class GPT(nn.Module):
         device,
     ) -> torch.Tensor:
         self.eval()
-        bos_tokenized = tokenizer.encode_ordinary(bos)
+        bos_tokenized = np.array(tokenizer.encode(bos).ids)
         bos_tokenized = bos_tokenized[-sentence_size:]
-        bos_tokenized = torch.LongTensor([bos_tokenized])
+        bos_tokenized = bos_tokenized.reshape(1, -1)
+        bos_tokenized = torch.LongTensor(bos_tokenized)
         _, add_sentence = self(bos_tokenized.to(device))
         self.train()
         return add_sentence

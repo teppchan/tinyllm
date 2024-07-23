@@ -48,13 +48,13 @@ def main(
     drop_out_rate: float,
     layer_eps: float,
 ):
+    now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
     data_filename = Path(f"data/{data_name}/tokenized_text.bin")
     tokenizer_path = Path(f"data/{data_name}/tokenizer.json")
-    model_path = Path(f"model/{data_name}")
-    figure_dir = Path(f"figure/{data_name}")
+    model_path = Path(f"model/{data_name}_{now}")
 
     model_path.mkdir(exist_ok=True, parents=True)
-    figure_dir.mkdir(exist_ok=True, parents=True)
 
     tokenizer = Tokenizer.from_file(str(tokenizer_path))
     print(f"load tokenizer ({tokenizer_path})")
@@ -120,7 +120,7 @@ def main(
 
     print(gpt)
 
-    writer = SummaryWriter(log_dir=f"{logdir}/{data_name}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    writer = SummaryWriter(log_dir=f"{logdir}/{data_name}_{now}")
     x, y = get_batch("train", batch_size=batch_size, device=device)
     padding_mask, mask = gpt.create_mask(x, 0, device)
     # writer.add_graph(gpt, {"x": x, "y": y, "pad_mask_self": padding_mask, "mask_self": mask})
@@ -230,7 +230,7 @@ def main(
                 "iter": cur_iter,
                 "best_loss": best_loss,
             }
-            torch.save(checkpoint, "best_checkpoint.bin")
+            torch.save(checkpoint, f"{model_path}/best_checkpoint.bin")
             # print(f"params updated. Best Loss: {best_loss}")
             # print(f"Val all loss: {avg_valid_loss}")
 
@@ -246,11 +246,11 @@ def main(
             "best_loss": best_loss,
             "loss": avg_valid_loss,
         }
-        torch.save(checkpoint, "latest_checkpoint.bin")
+        torch.save(checkpoint, f"{model_path}/latest_checkpoint.bin")
 
         writer.add_scalar("scheduler/lr", scheduler.get_last_lr()[0], cur_iter)
 
-        with open("learning_detail_latest.txt", "w") as f:
+        with open(f"{model_path}/learning_detail_latest.txt", "w") as f:
             f.write("Training condition:\n")
             f.write(f"iter: {cur_iter}\n")
             f.write("hyper params:\n")
