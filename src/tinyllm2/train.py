@@ -20,10 +20,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 @click.command()
-@click.option(
-    "--data_name",
-    type=str,
-)
+@click.option("--data_name", type=str)
 @click.option("--logdir", type=str, default="logs")
 @click.option("--max_iters", type=int, default=10000)
 @click.option("--batch_size", type=int, default=4)
