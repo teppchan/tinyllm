@@ -1,4 +1,3 @@
-import pickle
 import gc
 import json
 import click
@@ -33,7 +32,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 @click.option("--num_heads", type=int, default=6)
 @click.option("--depth", type=int, default=6)
 @click.option("--sentence_size", type=int, default=1024)
-@click.option("--drop_out_rate", type=float, default=0.0)
+@click.option("--drop_out_rate", type=float, default=0.1)
 @click.option("--layer_eps", type=float, default=1.0e-5)
 def main(
     data_name: str,
@@ -48,7 +47,7 @@ def main(
     drop_out_rate: float,
     layer_eps: float,
 ):
-    now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     data_filename = Path(f"data/{data_name}/tokenized_text.bin")
     tokenizer_path = Path(f"data/{data_name}/tokenizer.json")
@@ -56,9 +55,7 @@ def main(
 
     model_path.mkdir(exist_ok=True, parents=True)
 
-    tokenizer = Tokenizer.from_file(str(tokenizer_path))
     print(f"load tokenizer ({tokenizer_path})")
-
     tokenizer_json = json.load(open(tokenizer_path, "r"))
     vocab_size = len(tokenizer_json["model"]["vocab"])
     print(f"vocab_size = {vocab_size}")
@@ -73,6 +70,11 @@ def main(
     split_idx = int(train_ratio * total_tokens)
     train_data = tokenized_text[:split_idx]
     val_data = tokenized_text[split_idx:]
+
+    # tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    # print(train_data[:100])
+    # print(tokenizer.decode(train_data[:100]))
+    # exit()
 
     # print(train_data)
     # exit()
@@ -108,14 +110,15 @@ def main(
         return x.to(device), y.to(device)
 
     gpt = GPT(
-        vocab_size,
-        embedding_size,
-        embedding_size * 4,
-        num_heads,
-        0,
+        vocab_size=vocab_size,
+        embedding_dim=embedding_size,
+        ffn_dim=embedding_size * 4,
+        num_heads=num_heads,
+        drop_out_rate=drop_out_rate,
         batch_first=True,
         T=sentence_size,
         N=depth,
+        layer_eps=layer_eps,
     ).to(device)
 
     print(gpt)
@@ -123,22 +126,9 @@ def main(
     writer = SummaryWriter(log_dir=f"{logdir}/{data_name}_{now}")
     x, y = get_batch("train", batch_size=batch_size, device=device)
     padding_mask, mask = gpt.create_mask(x, 0, device)
-    # writer.add_graph(gpt, {"x": x, "y": y, "pad_mask_self": padding_mask, "mask_self": mask})
     writer.add_graph(gpt, (x, y, padding_mask, mask))
 
-    warmup_iters = 2000
-
-    optimizer = torch.optim.Adam(gpt.parameters(), lr=0.0001)
-
-    max_lr = 2.5e-5
-    min_lr = 2.5e-6
-
-    def get_lr(cur_iter):
-        if cur_iter < warmup_iters:
-            return max_lr * cur_iter / warmup_iters
-        return (max_lr * (np.cos(cur_iter / max_iters * np.pi) + 1)).clip(
-            min_lr, max_lr
-        )
+    optimizer = torch.optim.AdamW(gpt.parameters(), lr=1e-4)
 
     # batch_iteration = 128
     scaler = torch.cuda.amp.GradScaler(enabled=True)
@@ -146,38 +136,13 @@ def main(
     begin = 0
     val_iteration = 1
 
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda cur_iter: get_lr(cur_iter)
-    )
     gc.collect()
     torch.cuda.empty_cache()
 
-    # writer.add_hparams(
-    #     {
-    #         "data_name": data_name,
-    #         "max_iters": max_iters,
-    #         "batch_size": batch_size,
-    #         "batch_iteration": batch_iteration,
-    #         "valid_iteration": val_iteration,
-    #         "embedding_size": embedding_size,
-    #         "num_heads": num_heads,
-    #         "depth": depth,
-    #         "sentence_size": sentence_size,
-    #         "drop_out_rate": drop_out_rate,
-    #         "layer_eps": layer_eps,
-    #         "max_lr": max_lr,
-    #         "min_lr": min_lr,
-    #         "warmup_iters": warmup_iters,
-    #         "vocab_size": vocab_size,
-    #         "total_tokens": total_tokens,
-    #     },
-    # )
-
     gpt.train()
     for cur_iter in tqdm(range(begin, max_iters)):
-
         train_loss = 0.0
-        for batch_iter in range(batch_iteration):
+        for _ in range(batch_iteration):
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled=True):
                 x, y = get_batch("train", batch_size=batch_size, device=device)
@@ -197,12 +162,10 @@ def main(
 
             del x, y, padding_mask, mask, loss, pred
 
-        scheduler.step()
-
         writer.add_scalar("loss/train", train_loss.item() / batch_iteration, cur_iter)
 
         valid_loss = 0.0
-        for val_iter in range(val_iteration):
+        for _ in range(val_iteration):
             with torch.no_grad():
                 with torch.cuda.amp.autocast(enabled=True):
                     x, y = get_batch("valid", batch_size=batch_size, device=device)
@@ -248,8 +211,6 @@ def main(
         }
         torch.save(checkpoint, f"{model_path}/latest_checkpoint.bin")
 
-        writer.add_scalar("scheduler/lr", scheduler.get_last_lr()[0], cur_iter)
-
         with open(f"{model_path}/learning_detail_latest.txt", "w") as f:
             f.write("Training condition:\n")
             f.write(f"iter: {cur_iter}\n")
@@ -260,7 +221,6 @@ def main(
             f.write(f"num_heads: {num_heads}, ")
             f.write(f"Depth: {depth}, ")
             f.write(f"sentence_size: {sentence_size}\n")
-            f.write(f"lr: {scheduler.get_last_lr()[0]}, best_loss: {best_loss}\n")
             f.write(f"val_loss: {avg_valid_loss}\n")
 
         del valid_loss
