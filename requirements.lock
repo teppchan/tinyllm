@@ -123,7 +123,7 @@ requests==2.28.1
     # via datasets
     # via huggingface-hub
     # via tiktoken
-setuptools==71.1.0
+setuptools==70.0.0
     # via tensorboard
 six==1.16.0
     # via python-dateutil
